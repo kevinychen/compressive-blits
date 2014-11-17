@@ -63,8 +63,8 @@ CS_OBJECTS = $(patsubst %.cc, %.o, $(CS_SOURCES))
 
 HEADERS = hhhitlist.h hhhit.h hhalignment.h hhhmm.h hhfullalignment.h hhfullalignment.h hash.h list.h
 
-TARGETS = hhblits hhsearch hhmake hhalign hhfilter hhconsensus cstranslate
-TARGETS_STATIC = hhblits_static hhsearch_static hhmake_static hhalign_static hhfilter_static hhconsensus_static cstranslate_static
+TARGETS = hhblits hhsearch hhmake hhalign hhfilter hhconsensus cstranslate cluster
+TARGETS_STATIC = hhblits_static hhsearch_static hhmake_static hhalign_static hhfilter_static hhconsensus_static cstranslate_static cluster_static
 TARGETS_VALGRIND = hhblits_valgrind hhsearch_valgrind hhalign_valgrind
 
 all: $(TARGETS)
@@ -81,6 +81,12 @@ cstranslate: $(CS_DIR)/cstranslate_app.cc $(CS_DIR)/*.cc $(CS_DIR)/*.h $(CS_OBJE
 
 cstranslate_static: $(CS_DIR)/cstranslate_app.cc $(CS_DIR)/*.cc $(CS_DIR)/*.h $(CS_OBJECTS)
 	$(CPP) -static -lm -o cstranslate $(CS_DIR)/cstranslate_app.cc $(CS_OBJECTS)
+
+cluster: $(CS_DIR)/cluster_app.cc $(CS_DIR)/*.cc $(CS_DIR)/*.h $(CS_OBJECTS)
+	$(CPP) -lm -o cluster $(CS_DIR)/cluster_app.cc $(CS_OBJECTS)
+
+cluster_static: $(CS_DIR)/cluster_app.cc $(CS_DIR)/*.cc $(CS_DIR)/*.h $(CS_OBJECTS)
+	$(CPP) -static -lm -o cluster $(CS_DIR)/cluster_app.cc $(CS_OBJECTS)
 
 hhsearch: hhsearch.C $(SOURCES) $(HEADERS) $(CS_OBJECTS)
 	 $(CPP) hhsearch.C -o hhsearch $(CS_OBJECTS) $(HHSEARCH_LIBS)
@@ -142,4 +148,4 @@ hhsuite-userguide.pdf: hhsuite-userguide.tex
 
 clean: 	
 	-rm -f *.o cs/*.o
-	-rm -f hhconsensus hhconsensus_valgrind hhfilter_valgrind hhfilter hhalign_valgrind hhalign hhmake hhblits_valgrind hhblits hhsearch_valgrind hhsearch cstranslate 
+	-rm -f hhconsensus hhconsensus_valgrind hhfilter_valgrind hhfilter hhalign_valgrind hhalign hhmake hhblits_valgrind hhblits hhsearch_valgrind hhsearch cstranslate
