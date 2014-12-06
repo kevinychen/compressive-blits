@@ -205,29 +205,31 @@ void ClusterApp<Abc>::OutputProfile3(const CountProfile<Abc> &profile, FILE *fou
             case 'M':
             case 'V':
 //                fputs("A", fout);
-                buf[i] = 'A';
+                buf[i] = 'P';
                 break;
             case 'C':
             case 'F':
             case 'W':
             case 'Y':
-                buf[i] = 'B';
+                buf[i] = 'Q';
                 break;
             case 'D':
             case 'E':
             case 'H':
             case 'K':
             case 'R':
-                buf[i] = 'C';
+                buf[i] = 'R';
                 break;
             case 'G':
             case 'N':
             case 'P':
             case 'Q':
+            case 'S':
             case 'T':
-                buf[i] = 'D';
+                buf[i] = 'S';
                 break;
             default:
+                printf("char: %c\n", Abc::kIntToChar[max_a]);
                 buf[i] = '-';
         }
     }
