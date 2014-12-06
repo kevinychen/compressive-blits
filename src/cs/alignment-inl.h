@@ -154,6 +154,9 @@ void Alignment<Abc>::ReadFastaFlavors(FILE* fin, std::vector<std::string>& heade
     char buffer[kBufferSize];
     int c = '\0';
     while (!feof(fin)) {
+        if ((c = getc(fin)) == '\0') break;
+        ungetc(c, fin);
+
         // Read header
         while (fgetline(buffer, kBufferSize, fin)) {
             if (!strscn(buffer)) continue;
@@ -181,6 +184,7 @@ void Alignment<Abc>::ReadFastaFlavors(FILE* fin, std::vector<std::string>& heade
             if (c == EOF) break;
             ungetc(c, fin);
             if (static_cast<char>(c) == '>') break;
+            if (c == '\0') break;
         }
         // Remove whitespace
         seqs.back().erase(remove_if(seqs.back().begin(), seqs.back().end(), isspace), seqs.back().end());

@@ -41,7 +41,6 @@ struct ClusterAppOptions {
     // Validates the parameter settings and throws exception if needed.
     void Validate() {
         if (infile.empty()) throw Exception("No input file provided!");
-        if (alphabetfile.empty()) throw Exception("No abstract states provided!");
     }
 
     // The input alignment file with training data.
@@ -52,8 +51,6 @@ struct ClusterAppOptions {
     string appendfile;
     // Input file with context profile library or HMM for generating pseudocounts
     string modelfile;
-    // Input file with profile library to be used as abstract state alphabet
-    string alphabetfile;
     // Input file format
     string informat;
     // Output file format (abstract state sequence or abstract state profile)
@@ -119,7 +116,6 @@ void ClusterApp<Abc>::ParseOptions(GetOpt_pp& ops) {
     ops >> Option('M', "match-assign", opts_.match_assign, opts_.match_assign);
     ops >> Option('x', "pc-admix", opts_.pc_admix, opts_.pc_admix);
     ops >> Option('c', "pc-ali", opts_.pc_ali, opts_.pc_ali);
-    ops >> Option('A', "alphabet", opts_.alphabetfile, opts_.alphabetfile);
     ops >> Option('D', "context-data", opts_.modelfile, opts_.modelfile);
     ops >> Option('p', "pc-engine", opts_.pc_engine, opts_.pc_engine);
     ops >> Option('w', "weight", opts_.weight_as, opts_.weight_as);
@@ -188,7 +184,9 @@ void ClusterApp<Abc>::OutputProfile3(const CountProfile<Abc> &profile, FILE *fou
     // Convert profile to sequence of characters from a K-letter alphabet
     const Profile<Abc> counts(profile.counts);
     const Vector<double> neff(profile.neff);
-    char buf[4096];
+    char buf[1 << 16];
+    if (counts.length() + 2 > sizeof(buf))
+        throw Exception("Profile too long: length %d", counts.length());
     for (size_t i = 0; i < counts.length(); ++i) {
         size_t max_a = 0, max_val = 0, val;
         for (size_t a = 0; a < Abc::kSize; ++a) {
@@ -204,7 +202,6 @@ void ClusterApp<Abc>::OutputProfile3(const CountProfile<Abc> &profile, FILE *fou
             case 'L':
             case 'M':
             case 'V':
-//                fputs("A", fout);
                 buf[i] = 'P';
                 break;
             case 'C':
@@ -233,7 +230,8 @@ void ClusterApp<Abc>::OutputProfile3(const CountProfile<Abc> &profile, FILE *fou
                 buf[i] = '-';
         }
     }
-    buf[counts.length()] = '\0';
+    buf[counts.length()] = '\n';
+    buf[counts.length() + 1] = '\0';
     fputs(buf, fout);
 }
 
@@ -260,42 +258,10 @@ void ClusterApp<Abc>::WriteProfile(const CountProfile<Abc> &profile) const {
 
 template<class Abc>
 int ClusterApp<Abc>::Run() {
-    // Setup pseudocount engine
-    if (!opts_.modelfile.empty() && opts_.pc_engine == "lib") {
-        if (opts_.verbose)
-            fprintf(out_, "Reading context library for pseudocounts from %s ...\n",
-                GetBasename(opts_.modelfile).c_str());
-        FILE* fin = fopen(opts_.modelfile.c_str(), "r");
-        if (!fin)
-            throw Exception("Unable to read file '%s'!", opts_.modelfile.c_str());
-        pc_lib_.reset(new ContextLibrary<Abc>(fin));
-        TransformToLog(*pc_lib_);
-        fclose(fin);
-        pc_.reset(new LibraryPseudocounts<Abc>(*pc_lib_, opts_.weight_center,
-                                               opts_.weight_decay));
-
-    }
-
-    // Setup abstract state engine
-    if (opts_.verbose)
-        fprintf(out_, "Reading abstract state alphabet from %s ...\n",
-            GetBasename(opts_.alphabetfile).c_str());
-    FILE* fin = fopen(opts_.alphabetfile.c_str(), "r");
-    if (!fin) throw Exception("Unable to read file '%s'!",
-                              opts_.alphabetfile.c_str());
-    as_lib_.reset(new ContextLibrary<Abc>(fin));
-    if (as_lib_->size() != AS219::kSize)
-        throw Exception("Abstract state alphabet should have %zu states but actually "
-                        "has %zu states!", AS219::kSize, as_lib_->size());
-    if (static_cast<int>(as_lib_->wlen()) != 1)
-        throw Exception("Abstract state alphabet should have a window length of %zu "
-                        "but actually has %zu!", 1, as_lib_->wlen());
-    TransformToLog(*as_lib_);
-    fclose(fin);
-
     string header;
     CountProfile<Abc> profile;  // input profile we want to translate
 
+    FILE* fin;
     if (strcmp(opts_.infile.c_str(), "stdin") == 0)
         fin = stdin;
     else
@@ -307,26 +273,24 @@ int ClusterApp<Abc>::Run() {
         profile = CountProfile<Abc>(fin);;
         if (profile.name.empty()) header = GetBasename(opts_.infile, false);
         else header = profile.name;
-
-        if (pc_) {
-            if (opts_.verbose)
-                fprintf(out_, "Adding cs-pseudocounts (admix=%.2f) ...\n", opts_.pc_admix);
-            CSBlastAdmix admix(opts_.pc_admix, opts_.pc_ali);
-            profile.counts = pc_->AddTo(profile, admix);
-            Normalize(profile.counts, profile.neff);
-        }
-
     } else if (opts_.informat == "seq") {  // build profile from sequence
         Sequence<Abc> seq(fin);
         header = seq.header();
         profile = CountProfile<Abc>(seq);
+    } else if (opts_.informat == "a3ms") {  // ffdata of a3ms
+        FILE *fout = fopen(opts_.outfile.c_str(), "w");
+        if (!fout) throw Exception("Can't write to output file '%s'!", opts_.outfile.c_str());
 
-        if (pc_) {
-            if (opts_.verbose)
-                fprintf(out_, "Adding cs-pseudocounts (admix=%.2f) ...\n", opts_.pc_admix);
-            profile.counts = pc_->AddTo(seq, ConstantAdmix(opts_.pc_admix));
+        while (!feof(fin)) {
+            Alignment <Abc> ali(fin, A3M_ALIGNMENT);
+            header = ali.name();
+            profile = CountProfile<Abc>(ali);
+            fprintf(fout, "#%s\n", header.c_str());
+            OutputProfile3(profile, fout);
         }
 
+        fclose(fout);
+        return 0;
     } else {  // build profile from alignment
         AlignmentFormat f = AlignmentFormatFromString(opts_.informat);
         Alignment<Abc> ali(fin, f);
@@ -339,25 +303,8 @@ int ClusterApp<Abc>::Run() {
                 ali.AssignMatchColumnsByGapRule(opts_.match_assign);
         }
         profile = CountProfile<Abc>(ali);
-
-        if (pc_) {
-            if (opts_.verbose)
-                fprintf(out_, "Adding cs-pseudocounts (admix=%.2f) ...\n", opts_.pc_admix);
-            CSBlastAdmix admix(opts_.pc_admix, opts_.pc_ali);
-            profile.counts = pc_->AddTo(profile, admix);
-            Normalize(profile.counts, profile.neff);
-        }
     }
     fclose(fin);  // close input file
-
-    /*
-    for (int col = 0; col < 5; col++) {
-        printf("Column %d\n", col);
-        for (int i = 0; i < Abc::kAny; i++)
-            printf("%d: %.4f\n", i, profile.counts[col][i]);
-        printf("\n");
-    }
-    */
 
     WriteProfile(profile);
 
