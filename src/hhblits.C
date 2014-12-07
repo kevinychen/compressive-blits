@@ -2100,18 +2100,6 @@ int main(int argc, char **argv)
 
   if (print_elapsed) ElapsedTimeSinceLastCall("(initialize)");
   
-  if (par.prefilter)
-    {
-      // Initialize Prefiltering (Get DBsize)
-      init_prefilter();
-    }
-  else // Set all HMMs in database as new_dbs
-    {
-      init_no_prefiltering();
-    }
-
-  if (print_elapsed) ElapsedTimeSinceLastCall("(init prefilter)"); 
-
   // Input parameters
   if (v>=3)
     {
