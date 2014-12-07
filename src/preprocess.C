@@ -61,7 +61,7 @@ const int H = (1 << (2 * K));  // number of distinct hashes
 const int T = 4;  // remainder of k-mer (# bits per file)
 const int CHAIN_LIM = 64;  // max locs for a given hash
 const int JUMP = 4;  // overlap between different k-mers
-const int LOCS_LIM = 1 << 14;  // max size of locs table
+const int LOCS_LIM = 1 << 24;  // max size of locs table
 
 vector< pair<int, int> > locs[H];
 int line = 0;
@@ -73,28 +73,34 @@ static int ord(char c) {
 
 static int hash(char *buf, int i) {
     int h = 0;
-    for (int j = i; j < i + K; j++)
+    for (int j = i; j < i + K; j++) {
+        if (buf[j] == '-')
+            return -1;
         h = h * 4 + ord(buf[j]);
+    }
     return h;
 }
 
 static int flush() {
     printf("FLUSHING\n");
     char path_buf[16];
-    for (int j = 0; j < (1 << (2 * (K - T))); j++) {
-        sprintf(path_buf, "store/%03x", j);
+    for (int i = 0; i < (1 << (2 * (K - T))); i++) {
+        // Flush to filesystem
+        sprintf(path_buf, "store/%03x", i);
         FILE *fout = fopen(path_buf, "a");
         if (!fout)
             return 1;
-        for (int k = 0; k < (1 << (2 * T)); k++) {
-            int index = (j << (2 * T)) + k;
-            for (int l = 0; (size_t) l < locs[index].size(); l++)
-                fprintf(fout, "%x %d %d\n", index, locs[index][l].first, locs[index][l].second);
+        for (int j = 0; j < (1 << (2 * T)); j++) {
+            int index = (i << (2 * T)) + j;
+            for (int k = 0; (size_t) k < locs[index].size(); k++) {
+                fprintf(fout, "%x %d %d\n", index,
+                        locs[index][k].first, locs[index][k].second);
+            }
         }
         fclose(fout);
     }
-    for (int j = 0; j < H; j++)
-        locs[j].clear();
+    for (int i = 0; i < H; i++)
+        locs[i].clear();
     locs_size = 0;
     return 0;
 }
@@ -179,6 +185,8 @@ int read_HMM(FILE *fin) {
 
     for (int i = 0; i + K < seq_size; i += JUMP) {
         int h = hash(buf, i);
+        if (h == -1)
+            continue;
         if (locs[h].size() < (size_t) CHAIN_LIM) {
             locs[h].push_back( make_pair(line, i) );
             locs_size++;
