@@ -10,8 +10,8 @@
 
 using namespace std;
 
-const size_t K = 7;
-const size_t R = 12;
+const size_t K = 8;
+const size_t R = 24;
 
 vector<string*> seqs;
 vector< pair<size_t, size_t> > locs[1 << (2 * K)];  // size 4^K
@@ -31,11 +31,13 @@ int main(int argc, char *argv[]) {
     ifstream in(argv[1]);  // cs4s file
     string s;
     int line = 0;
-//    int histo[100]; for (int i = 0; i < 100; i++) histo[i] = 0;
-//    int total_saved = 0;
+    int histo[200]; for (int i = 0; i < 200; i++) histo[i] = 0;
+    int num_chars = 0;
+    int total_saved = 0;
     while (getline(in, s)) {
         if (s[0] == '#')  // header name
             continue;
+        num_chars += s.size();
         seqs.push_back(new string(s));
 
         for (int i = 0; i + K < s.size(); i++) {
@@ -60,17 +62,23 @@ int main(int argc, char *argv[]) {
                 if (sw > best_sw)
                     best_sw = sw;
             }
+            if (locs[h].size() < 10)
+                locs[h].push_back( make_pair(line, i) );
             i += R;
-            locs[h].push_back( make_pair(line, i) );
-//            histo[best_sw]++;
-//            if (best_sw > 3 * K)
-//                total_saved += best_sw / 3 - K;
+            if (best_sw < 200) histo[best_sw]++;
+            if (best_sw > 3 * K)
+                total_saved += best_sw / 3 - K;
         }
 
         line++;
+        if (line % 1000 == 0)
+            printf("line: %d\n", line);
+        if (line == 10000)
+            break;
     }
-//    for (int i = 0; i < 100; i++)
-//        printf("histo %d %d\n", i, histo[i]);
-//    printf("total saved: %d\n", total_saved);
+    for (int i = 0; i < 200; i++)
+        printf("histo %d %d\n", i, histo[i]);
+    printf("num chars: %d\n", num_chars);
+    printf("total saved: %d\n", total_saved);
     return 0;
 }
