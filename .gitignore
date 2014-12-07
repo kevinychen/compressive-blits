@@ -23,4 +23,5 @@ src/hhconsensus
 src/hhfilter
 src/hhmake
 src/hhsearch
+src/preprocess
 src/tags

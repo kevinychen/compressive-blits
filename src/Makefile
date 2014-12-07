@@ -63,8 +63,8 @@ CS_OBJECTS = $(patsubst %.cc, %.o, $(CS_SOURCES))
 
 HEADERS = hhhitlist.h hhhit.h hhalignment.h hhhmm.h hhfullalignment.h hhfullalignment.h hash.h list.h
 
-TARGETS = hhblits hhsearch hhmake hhalign hhfilter hhconsensus cstranslate cluster
-TARGETS_STATIC = hhblits_static hhsearch_static hhmake_static hhalign_static hhfilter_static hhconsensus_static cstranslate_static cluster_static
+TARGETS = hhblits hhsearch hhmake hhalign hhfilter hhconsensus cstranslate cluster preprocess
+TARGETS_STATIC = hhblits_static hhsearch_static hhmake_static hhalign_static hhfilter_static hhconsensus_static cstranslate_static cluster_static preprocess_static
 TARGETS_VALGRIND = hhblits_valgrind hhsearch_valgrind hhalign_valgrind
 
 all: $(TARGETS)
@@ -145,6 +145,12 @@ hhsuite-userguide.pdf: hhsuite-userguide.tex
 	pdflatex hhsuite-userguide.tex
 	pdflatex hhsuite-userguide.tex
 	cp hhsuite-userguide.pdf ../
+
+preprocess: preprocess.C $(SOURCES) $(HEADERS) $(CS_OBJECTS)
+	 $(CPP) preprocess.C -o preprocess $(CS_OBJECTS) $(preprocess_LIBS) $(FFINDEX_DIR)/libffindex.a
+
+preprocess_static: preprocess.C $(SOURCES) $(HEADERS)$(CS_OBJECTS)
+	 $(CPP) -static preprocess.C -o preprocess $(CS_OBJECTS) $(preprocess_LIBS) $(FFINDEX_DIR)/libffindex.a
 
 clean: 	
 	-rm -f *.o cs/*.o
