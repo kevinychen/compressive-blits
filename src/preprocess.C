@@ -63,8 +63,7 @@ const int CHAIN_LIM = 64;  // max locs for a given hash
 const int JUMP = 4;  // overlap between different k-mers
 const int LOCS_LIM = 1 << 24;  // max size of locs table
 
-vector< pair<int, int> > locs[H];
-int line = 0;
+vector< pair<char*, int> > locs[H];
 int locs_size = 0;
 
 static int ord(char c) {
@@ -93,14 +92,17 @@ static int flush() {
         for (int j = 0; j < (1 << (2 * T)); j++) {
             int index = (i << (2 * T)) + j;
             for (int k = 0; (size_t) k < locs[index].size(); k++) {
-                fprintf(fout, "%x %d %d\n", index,
+                fprintf(fout, "%x %s %d\n", index,
                         locs[index][k].first, locs[index][k].second);
             }
         }
         fclose(fout);
     }
-    for (int i = 0; i < H; i++)
+    for (int i = 0; i < H; i++) {
+        for (int j = 0; (size_t) j < locs[i].size(); j++)
+            delete[] locs[i][j].first;
         locs[i].clear();
+    }
     locs_size = 0;
     return 0;
 }
@@ -114,7 +116,6 @@ int read_HMM(FILE *fin) {
         return 1;
     }
     while (fgetc(fin) != '\n');  // read 'Done!' line
-    line++;
 
     int seq_size = -1;
     for (int i = 0; i < hmm->n_seqs; i++)
@@ -188,7 +189,19 @@ int read_HMM(FILE *fin) {
         if (h == -1)
             continue;
         if (locs[h].size() < (size_t) CHAIN_LIM) {
-            locs[h].push_back( make_pair(line, i) );
+            // Copy correct part of name
+            char *ptr = hmm->name;
+            while (*ptr != '|')
+                ptr++;
+            char *name = new char[32];
+            strcpy(name, ptr + 1);
+            ptr = name;
+            while (*ptr != '|')
+                ptr++;
+            strcpy(ptr, ".hhm");
+
+            // Push data into locs table
+            locs[h].push_back( make_pair(name, i) );
             locs_size++;
             if (locs_size > LOCS_LIM) {
                 if (flush())
