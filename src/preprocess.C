@@ -57,10 +57,15 @@ extern "C" {
 #include "hhalignment.C" // class Alignment
 
 const int K = 10;  // k-mer length for hashing
-const int CHAIN_LIM = 10;  // max locs for a given hash
+const int H = (1 << (2 * K));  // number of distinct hashes
+const int T = 4;  // remainder of k-mer (# bits per file)
+const int CHAIN_LIM = 64;  // max locs for a given hash
 const int JUMP = 4;  // overlap between different k-mers
+const int LOCS_LIM = 1 << 14;  // max size of locs table
 
-vector< pair<int, int> > locs[2 << (2 * K)];
+vector< pair<int, int> > locs[H];
+int line = 0;
+int locs_size = 0;
 
 static int ord(char c) {
     return c - 'P';
@@ -73,7 +78,28 @@ static int hash(char *buf, int i) {
     return h;
 }
 
-int read_HMM(FILE *fin, int line) {
+static int flush() {
+    printf("FLUSHING\n");
+    char path_buf[16];
+    for (int j = 0; j < (1 << (2 * (K - T))); j++) {
+        sprintf(path_buf, "store/%03x", j);
+        FILE *fout = fopen(path_buf, "a");
+        if (!fout)
+            return 1;
+        for (int k = 0; k < (1 << (2 * T)); k++) {
+            int index = (j << (2 * T)) + k;
+            for (int l = 0; (size_t) l < locs[index].size(); l++)
+                fprintf(fout, "%x %d %d\n", index, locs[index][l].first, locs[index][l].second);
+        }
+        fclose(fout);
+    }
+    for (int j = 0; j < H; j++)
+        locs[j].clear();
+    locs_size = 0;
+    return 0;
+}
+
+int read_HMM(FILE *fin) {
     HMM *hmm = new HMM();
     hmm->Read(fin, NULL);
 
@@ -81,6 +107,8 @@ int read_HMM(FILE *fin, int line) {
         delete hmm;
         return 1;
     }
+    while (fgetc(fin) != '\n');  // read 'Done!' line
+    line++;
 
     int seq_size = -1;
     for (int i = 0; i < hmm->n_seqs; i++)
@@ -151,8 +179,14 @@ int read_HMM(FILE *fin, int line) {
 
     for (int i = 0; i + K < seq_size; i += JUMP) {
         int h = hash(buf, i);
-        if (locs[h].size() < (size_t) CHAIN_LIM)
+        if (locs[h].size() < (size_t) CHAIN_LIM) {
             locs[h].push_back( make_pair(line, i) );
+            locs_size++;
+            if (locs_size > LOCS_LIM) {
+                if (flush())
+                    return 1;  // error
+            }
+        }
     }
 
     delete hmm;
@@ -164,13 +198,9 @@ int main(int argc, char **argv)
 {
     FILE *fin = fopen(argv[1], "r");
 
-    int line = 0;
-    while (read_HMM(fin, line++) == 0)
-        while (fgetc(fin) != '\n');  // read 'Done!' line
-
-    for (int i = 0; i <= 0xff; i++)
-        for (int j = 0; (size_t) j < locs[i].size(); j++)
-            printf("%x: (%d, %d)\n", i, locs[i][j].first, locs[i][j].second);
+    while (read_HMM(fin) == 0);
+    if (flush())
+        printf("error with flushing\n");
 
     return 0;
 }
