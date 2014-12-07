@@ -149,13 +149,10 @@ int read_HMM(FILE *fin, int line) {
         }
     }
 
-    for (int i = 0; i + K < seq_size; i++) {
+    for (int i = 0; i + K < seq_size; i += JUMP) {
         int h = hash(buf, i);
-        if (locs[h].size() > 0)
-            printf("collision\n");
         if (locs[h].size() < (size_t) CHAIN_LIM)
             locs[h].push_back( make_pair(line, i) );
-        i += JUMP;
     }
 
     delete hmm;
@@ -167,12 +164,13 @@ int main(int argc, char **argv)
 {
     FILE *fin = fopen(argv[1], "r");
 
-    while (read_HMM(fin, 0) == 0)
+    int line = 0;
+    while (read_HMM(fin, line++) == 0)
         while (fgetc(fin) != '\n');  // read 'Done!' line
 
-//    for (int i = 0; i < (1 << (2 * K)); i++)
-//        if (locs[i].size() > 0)
-//            printf("filled: %x\n", i);
+    for (int i = 0; i <= 0xff; i++)
+        for (int j = 0; (size_t) j < locs[i].size(); j++)
+            printf("%x: (%d, %d)\n", i, locs[i][j].first, locs[i][j].second);
 
     return 0;
 }
