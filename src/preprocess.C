@@ -29,6 +29,7 @@ using std::string;
 using std::stringstream;
 using std::vector;
 using std::pair;
+using std::make_pair;
 
 extern "C" {
 #include <ffindex.h>     // fast index-based database reading
@@ -55,12 +56,31 @@ extern "C" {
 #include "hhhmm.C"	 // class HMM
 #include "hhalignment.C" // class Alignment
 
-int main(int argc, char **argv)
-{
-    FILE *fin = fopen(argv[1], "r");
+const int K = 10;  // k-mer length for hashing
+const int CHAIN_LIM = 10;  // max locs for a given hash
+const int JUMP = 4;  // overlap between different k-mers
 
+vector< pair<int, int> > locs[2 << (2 * K)];
+
+static int ord(char c) {
+    return c - 'P';
+}
+
+static int hash(char *buf, int i) {
+    int h = 0;
+    for (int j = i; j < i + K; j++)
+        h = h * 4 + ord(buf[j]);
+    return h;
+}
+
+int read_HMM(FILE *fin, int line) {
     HMM *hmm = new HMM();
     hmm->Read(fin, NULL);
+
+    if (hmm->n_seqs == 0) {
+        delete hmm;
+        return 1;
+    }
 
     int seq_size = -1;
     for (int i = 0; i < hmm->n_seqs; i++)
@@ -129,9 +149,30 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("seq: %s\n", buf);
+    for (int i = 0; i + K < seq_size; i++) {
+        int h = hash(buf, i);
+        if (locs[h].size() > 0)
+            printf("collision\n");
+        if (locs[h].size() < (size_t) CHAIN_LIM)
+            locs[h].push_back( make_pair(line, i) );
+        i += JUMP;
+    }
 
     delete hmm;
+
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    FILE *fin = fopen(argv[1], "r");
+
+    while (read_HMM(fin, 0) == 0)
+        while (fgetc(fin) != '\n');  // read 'Done!' line
+
+//    for (int i = 0; i < (1 << (2 * K)); i++)
+//        if (locs[i].size() > 0)
+//            printf("filled: %x\n", i);
 
     return 0;
 }
