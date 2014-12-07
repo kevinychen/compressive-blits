@@ -259,6 +259,7 @@ inline int PickBin(char status);
 
 // Include hhworker.C and hhprefilter.C here, because it needs some of the above variables
 #include "hhworker.C"      // functions: AlignByWorker, RealignByWorker, WorkerLoop
+#include "preprocess.h"
 #include "hhprefilter.C"   // some prefilter functions
 
 
@@ -2172,7 +2173,7 @@ int main(int argc, char **argv)
 
     if (par.prefilter)
       if (v>=2) printf("Prefiltering database\n");
-      prefilter_db();  // in hhprefilter.C
+      prefilter_db(q);  // in hhprefilter.C
     
     if (print_elapsed) ElapsedTimeSinceLastCall("(prefiltering)"); 
 

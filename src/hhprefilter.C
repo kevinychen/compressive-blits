@@ -1017,7 +1017,7 @@ void stripe_query_profile()
 ////////////////////////////////////////////////////////////////////////
 // Main prefilter function
 ////////////////////////////////////////////////////////////////////////
-void prefilter_db()
+void prefilter_db(HMM *query)
 {
   doubled = new(Hash<char>);
   doubled->New(16381,0);
@@ -1025,52 +1025,51 @@ void prefilter_db()
   for (int idb=0; idb<ndb_old; idb++) delete[](dbfiles_old[idb]);
   ndb_new = ndb_old = 0;
 
-  FILE *fin = fopen("/home/kyc/hhblits/data/mapping.txt", "r");
-  char buf[32];
-  for (int i = 0; i < 1000; i++)
-    {
-        fgetline(buf, 32, fin);
-        char *ptr = buf;
-        while (*ptr != ' ')
-            ptr++;
-      // Add hit to dbfiles
-      char name[NAMELEN];
-      char db_name[NAMELEN];
-      strwrd(name,ptr + 1);
-      char* ptr1 = strchr(name,'|');
-      if (ptr1) // found '|' in sequence id? => extract string up to '|'
-      	{
-      	  char* ptr2 = strchr(++ptr1,'|');
-      	  if (ptr2) strmcpy(db_name,ptr1,ptr2-ptr1);
-	  else strcpy(db_name,ptr1);
-      	}
-      else 
-      	strcpy(db_name,name);
-      
-      strcat(db_name,".");
-      strcat(db_name,db_ext);
-      printf("name: %s\n", db_name);
+  char query_cs4[1 << 16];
+  int seq_size = to_cs4(query, query_cs4);
+  char path_buf[16];
+  int count = 0;
+  for (int i = 0; i + K < seq_size; i += JUMP) {
+      int h = hash(query_cs4, i);
+      if (h == -1)
+          continue;
+      sprintf(path_buf, "store/%03x", h >> (2 * T));
+      FILE *fin = fopen(path_buf, "r");
+      if (!fin)
+          throw Exception("Loc database not found");
+      while (true) {
+          int cand_h;
+          if (fscanf(fin, "%x", &cand_h) != 1)  // EOF
+              break;
+          if (h == cand_h) {
+              char name[NAMELEN];
+              char db_name[NAMELEN];
+              if (fscanf(fin, "%s", db_name) != 1)
+                  throw Exception("IO Error");
 
-      if (! doubled->Contains(db_name))
-	{
-	  doubled->Add(db_name);
-	  // check, if DB was searched in previous rounds 
-	  strcat(name,"__1");  // irep=1
+              if (count++ < 1000 && !doubled->Contains(db_name))
+              {
+                  doubled->Add(db_name);
+                  // check, if DB was searched in previous rounds
+                  strcat(name,"__1");  // irep=1
 
-	  if (previous_hits->Contains(name))
-	    {
-	      dbfiles_old[ndb_old]=new(char[strlen(db_name)+1]);
-	      strcpy(dbfiles_old[ndb_old],db_name);
-	      ndb_old++;
-	    }
-	  else 
-	    {
-	      dbfiles_new[ndb_new]=new(char[strlen(db_name)+1]);
-	      strcpy(dbfiles_new[ndb_new],db_name);
-	      ndb_new++;
-	    }
-	}
-    }
+                  if (previous_hits->Contains(name))
+                  {
+                      dbfiles_old[ndb_old]=new(char[strlen(db_name)+1]);
+                      strcpy(dbfiles_old[ndb_old],db_name);
+                      ndb_old++;
+                  }
+                  else
+                  {
+                      dbfiles_new[ndb_new]=new(char[strlen(db_name)+1]);
+                      strcpy(dbfiles_new[ndb_new],db_name);
+                      ndb_new++;
+                  }
+              }
+          }
+          fgetline(path_buf, 1, fin);
+      }
+  }
 
   // Free memory
   free(qc);
