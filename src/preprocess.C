@@ -29,7 +29,6 @@ using std::string;
 using std::stringstream;
 using std::vector;
 using std::pair;
-using std::make_pair;
 
 extern "C" {
 #include <ffindex.h>     // fast index-based database reading
@@ -58,7 +57,13 @@ extern "C" {
 
 #include "preprocess.h"
 
-vector< pair<char*, int> > locs[H];
+typedef struct {
+    char *name;
+    char *subseq;
+    int pos;
+} Loc;
+
+vector<Loc*> locs[H];
 int locs_size = 0;
 
 static int flush() {
@@ -73,15 +78,19 @@ static int flush() {
         for (int j = 0; j < (1 << (2 * T)); j++) {
             int index = (i << (2 * T)) + j;
             for (int k = 0; (size_t) k < locs[index].size(); k++) {
-                fprintf(fout, "%x %s %d\n", index,
-                        locs[index][k].first, locs[index][k].second);
+                fprintf(fout, "%x %s %s %d\n",
+                        index, locs[index][k]->name,
+                        locs[index][k]->subseq, locs[index][k]->pos);
             }
         }
         fclose(fout);
     }
     for (int i = 0; i < H; i++) {
-        for (int j = 0; (size_t) j < locs[i].size(); j++)
-            delete[] locs[i][j].first;
+        for (int j = 0; (size_t) j < locs[i].size(); j++) {
+            delete[] locs[i][j]->name;
+            delete[] locs[i][j]->subseq;
+            free(locs[i][j]);
+        }
         locs[i].clear();
     }
     locs_size = 0;
@@ -99,10 +108,10 @@ int read_cs4(FILE *fin) {
     // read name
     if (fgetline(name_buf, sizeof(name_buf), fin) == NULL)
         return 1;
-    char *ptr = name_buf;
-    while (*ptr != '|')
-        ptr++;
-    strcpy(ptr + 10, ".hhm");
+    char *name_ptr = name_buf;
+    while (*name_ptr != '|')
+        name_ptr++;
+    strcpy(name_ptr + 10, ".hhm");
 
     // read seq
     fgetline(buf, sizeof(buf), fin);
@@ -114,8 +123,19 @@ int read_cs4(FILE *fin) {
         if (locs[h].size() < (size_t) CHAIN_LIM) {
             // Push data into locs table
             char *name = new char[32];
-            strcpy(name, ptr + 1);
-            locs[h].push_back( make_pair(name, i) );
+            strcpy(name, name_ptr + 1);
+            char *subseq = new char[RR + K + RR + 2];
+            char *ptr = subseq;
+            for (int j = (i < RR ? 0 : i - RR);
+                    j < seq_size && j < i + K + RR; j++) {
+                *ptr++ = buf[j];
+            }
+            *ptr = '\0';
+            Loc *loc = (Loc*) malloc(sizeof(Loc));
+            loc->name = name;
+            loc->subseq = subseq;
+            loc->pos = i;
+            locs[h].push_back(loc);
             locs_size++;
             if (locs_size > LOCS_LIM) {
                 if (flush())
@@ -127,6 +147,7 @@ int read_cs4(FILE *fin) {
     return 0;
 }
 
+/*
 int read_HMM(FILE *fin) {
     HMM *hmm = new HMM();
     hmm->Read(fin, NULL);
@@ -157,7 +178,11 @@ int read_HMM(FILE *fin) {
             strcpy(ptr, ".hhm");
 
             // Push data into locs table
-            locs[h].push_back( make_pair(name, i) );
+            Loc *loc = malloc(sizeof(Loc));
+            loc->name = name;
+            loc->subseq = subseq;
+            loc->pos = i;
+            locs[h].push_back(loc);
             locs_size++;
             if (locs_size > LOCS_LIM) {
                 if (flush())
@@ -170,6 +195,7 @@ int read_HMM(FILE *fin) {
 
     return 0;
 }
+*/
 
 void parseHMM(FILE *fin) {
     HMM *hmm = new HMM();
