@@ -2,8 +2,9 @@ const int K = 10;  // k-mer length for hashing
 const int H = (1 << (2 * K));  // number of distinct hashes
 const int T = 4;  // remainder of k-mer (# bits per file)
 const int RR = 7;  // window size around target k-mer
+const int LL = 32;  // threshhold for window alignment
 const int CHAIN_LIM = 64;  // max locs for a given hash
-const int JUMP = 1;  // overlap between different k-mers
+const int JUMP = 2;  // overlap between different k-mers
 const int LOCS_LIM = 1 << 24;  // max size of locs table
 
 int ord(char c) {

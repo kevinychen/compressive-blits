@@ -1012,6 +1012,38 @@ void stripe_query_profile()
 }
 ////////////////////////////////////////////////////////////////////////
 
+const int GAP_PEN = 4;
+
+const int TB_START = 0;
+const int TB_DIAG = 1;
+const int TB_DOWN = 2;
+const int TB_RIGHT = 3;
+
+static int score(char c1, char c2) {
+    return c1 == c2 ? 3 : -2;
+}
+
+int smith_waterman(const char *seq1, const char *seq2, int len1, int len2) {
+    int F[len1 + 1][len2 + 1];
+
+    for (int i = 0; i <= len1; i++)
+        F[i][0] = 0;
+    for (int j = 0; j <= len2; j++)
+        F[0][j] = 0;
+
+    int best = 0;
+    for (int i = 1; i <= len1; i++)
+        for (int j = 1; j <= len2; j++) {
+            int val1 = 0;
+            int val2 = F[i - 1][j - 1] + score(seq1[i - 1], seq2[j - 1]);
+            int val3 = F[i - 1][j] - GAP_PEN;
+            int val4 = F[i][j - 1] - GAP_PEN;
+            F[i][j] = std::max(std::max(val1, val2), std::max(val3, val4));
+            if (F[i][j] > best)
+                best = F[i][j];
+        }
+    return best;
+}
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -1027,6 +1059,7 @@ void prefilter_db(HMM *query)
 
   char query_cs4[1 << 16];
   int seq_size = to_cs4(query, query_cs4);
+  printf("query cs4: %s\n", query_cs4);
   char path_buf[16];
   for (int i = 0; i + K < seq_size; i++) {
       int h = hash(query_cs4, i);
@@ -1041,15 +1074,21 @@ void prefilter_db(HMM *query)
           if (fscanf(fin, "%x", &cand_h) != 1)  // EOF
               break;
           int num_diffs = 0;
-          for (int i = 0; i < (2 * T); i++)
-              if ((cand_h ^ h) & (1 << i))
+          for (int j = 0; j < (2 * T); j++)
+              if ((cand_h ^ h) & (1 << j))
                   num_diffs++;
-          if (num_diffs <= 1) {
+          if (num_diffs <= 3) {
               char db_name[NAMELEN];
               if (fscanf(fin, "%s", db_name) != 1)
                   throw Exception("IO Error");
+              char subseq[RR + K + RR + 2];
+              if (fscanf(fin, "%s", subseq) != 1)
+                  throw Exception("IO Error 2");
 
-              if (!doubled->Contains(db_name))
+              char *start = query_cs4 + std::max(0, i - RR);
+              int len = query_cs4 + std::min(seq_size, i + K + RR) - start;
+              int sw = smith_waterman(subseq, start, strlen(subseq), len);
+              if (sw >= LL && !doubled->Contains(db_name))
               {
                   doubled->Add(db_name);
 
