@@ -1028,8 +1028,7 @@ void prefilter_db(HMM *query)
   char query_cs4[1 << 16];
   int seq_size = to_cs4(query, query_cs4);
   char path_buf[16];
-  int count = 0;
-  for (int i = 0; i + K < seq_size; i += JUMP) {
+  for (int i = 0; i + K < seq_size; i++) {
       int h = hash(query_cs4, i);
       if (h == -1)
           continue;
@@ -1041,19 +1040,20 @@ void prefilter_db(HMM *query)
           int cand_h;
           if (fscanf(fin, "%x", &cand_h) != 1)  // EOF
               break;
-          if (h == cand_h) {
-              char name[NAMELEN];
+          int num_diffs = 0;
+          for (int i = 0; i < (2 * T); i++)
+              if ((cand_h ^ h) & (1 << i))
+                  num_diffs++;
+          if (num_diffs <= 1) {
               char db_name[NAMELEN];
               if (fscanf(fin, "%s", db_name) != 1)
                   throw Exception("IO Error");
 
-              if (count++ < 1000 && !doubled->Contains(db_name))
+              if (!doubled->Contains(db_name))
               {
                   doubled->Add(db_name);
-                  // check, if DB was searched in previous rounds
-                  strcat(name,"__1");  // irep=1
 
-                  if (previous_hits->Contains(name))
+                  if (previous_hits->Contains(db_name))
                   {
                       dbfiles_old[ndb_old]=new(char[strlen(db_name)+1]);
                       strcpy(dbfiles_old[ndb_old],db_name);
