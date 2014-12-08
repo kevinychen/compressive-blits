@@ -88,6 +88,45 @@ static int flush() {
     return 0;
 }
 
+int read_cs4(FILE *fin) {
+    static int count = 0;
+    if (++count % 1000 == 0)
+        printf("read %d cs4s\n", count);
+
+    char name_buf[1 << 16];
+    char buf[1 << 16];
+
+    // read name
+    if (fgetline(name_buf, sizeof(name_buf), fin) == NULL)
+        return 1;
+    char *ptr = name_buf;
+    while (*ptr != '|')
+        ptr++;
+    strcpy(ptr + 10, ".hhm");
+
+    // read seq
+    fgetline(buf, sizeof(buf), fin);
+    int seq_size = strlen(buf);
+    for (int i = 0; i + K < seq_size; i += JUMP) {
+        int h = hash(buf, i);
+        if (h == -1)
+            continue;
+        if (locs[h].size() < (size_t) CHAIN_LIM) {
+            // Push data into locs table
+            char *name = new char[32];
+            strcpy(name, ptr + 1);
+            locs[h].push_back( make_pair(name, i) );
+            locs_size++;
+            if (locs_size > LOCS_LIM) {
+                if (flush())
+                    return 1;  // error
+            }
+        }
+    }
+
+    return 0;
+}
+
 int read_HMM(FILE *fin) {
     HMM *hmm = new HMM();
     hmm->Read(fin, NULL);
@@ -132,11 +171,19 @@ int read_HMM(FILE *fin) {
     return 0;
 }
 
+void parseHMM(FILE *fin) {
+    HMM *hmm = new HMM();
+    hmm->Read(fin, NULL);
+    char buf[1 << 16];
+    to_cs4(hmm, buf);
+    printf("code: %s\n", buf);
+}
+
 int main(int argc, char **argv)
 {
     FILE *fin = fopen(argv[1], "r");
 
-    while (read_HMM(fin) == 0);
+    while (read_cs4(fin) == 0);
     if (flush())
         printf("error with flushing\n");
 
